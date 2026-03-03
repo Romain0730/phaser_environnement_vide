@@ -2,7 +2,6 @@
 /** CONFIGURATION ET LANCEMENT DU JEU
 /***********************************************************************/
 var config = {
-
     type: Phaser.AUTO,
     width: 800,
     height: 600,
@@ -22,6 +21,7 @@ var config = {
 
 var game = new Phaser.Game(config);
 
+
 /***********************************************************************/
 /** VARIABLES GLOBALES
 /***********************************************************************/
@@ -29,24 +29,27 @@ var player;
 var groupe_plateformes;
 var groupe_etoiles;
 var groupe_bombes;
-var groupe_balles;   // groupe des balles
 var clavier;
-var toucheTir;
-
 var score = 0;
 var zone_texte_score;
 var gameOver = false;
+
 
 /***********************************************************************/
 /** PRELOAD
 /***********************************************************************/
 function preload() {
 
+    // chargement tuiles de jeu
+    this.load.image("Phaser_tuilesdejeu", "src/assets/tuilesJeu.png");
+
+    // chargement de la carte
+    this.load.tilemapTiledJSON("carte", "src/assets/map.json");
+
     this.load.image('img_ciel', 'src/assets/sky.png');
     this.load.image('img_plateforme', 'src/assets/platform.png');
     this.load.image('img_etoile', 'src/assets/star.png');
     this.load.image('img_bombe', 'src/assets/bomb.png');
-    this.load.image('img_balle', 'src/assets/balle.png'); // balle
 
     this.load.spritesheet('img_perso', 'src/assets/dude.png', {
         frameWidth: 32,
@@ -54,31 +57,72 @@ function preload() {
     });
 }
 
+
 /***********************************************************************/
 /** CREATE
 /***********************************************************************/
 function create() {
 
+    // chargement de la carte
+    const carteDuNiveau = this.add.tilemap("carte");
+
+    // chargement du jeu de tuiles
+    const tileset = carteDuNiveau.addTilesetImage(
+        "tuiles_de_jeu",
+        "Phaser_tuilesdejeu"
+    );
+
+    // chargement du calque calque_background
+    const calque_background = carteDuNiveau.createLayer(
+        "calque_background",
+        tileset
+    );
+
+    // chargement du calque calque_background_2
+    const calque_background_2 = carteDuNiveau.createLayer(
+        "calque_background_2",
+        tileset
+    );
+
+    // chargement du calque calque_plateformes
+    const calque_plateformes = carteDuNiveau.createLayer(
+        "calque_plateformes",
+        tileset
+    );
+
+    // définition des tuiles de plateformes qui sont solides
+    calque_plateformes.setCollisionByProperty({ estSolide: true });
+
+    // ajout d'une collision entre le joueur et le calque plateformes
+    this.physics.add.collider(player, calque_plateformes);
+
+    // redimensionnement du monde
+    this.physics.world.setBounds(0, 0, 3200, 640);
+
+    // caméra
+    this.cameras.main.setBounds(0, 0, 3200, 640);
+    this.cameras.main.startFollow(player);
+
+    // décor
+    /*
     this.add.image(400, 300, 'img_ciel');
 
-    // plateformes
     groupe_plateformes = this.physics.add.staticGroup();
     groupe_plateformes.create(400, 584, 'img_plateforme').setScale(2).refreshBody();
     groupe_plateformes.create(600, 450, 'img_plateforme');
     groupe_plateformes.create(50, 300, 'img_plateforme');
     groupe_plateformes.create(750, 220, 'img_plateforme');
+    */
 
     // joueur
     player = this.physics.add.sprite(100, 450, 'img_perso');
     player.setBounce(0.2);
     player.setCollideWorldBounds(true);
-    player.direction = 'right'; // direction initiale
 
     this.physics.add.collider(player, groupe_plateformes);
 
     // clavier
     clavier = this.input.keyboard.createCursorKeys();
-    toucheTir = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A);
 
     // animations
     this.anims.create({
@@ -119,20 +163,9 @@ function create() {
 
     // bombes
     groupe_bombes = this.physics.add.group();
+
     this.physics.add.collider(groupe_bombes, groupe_plateformes);
     this.physics.add.collider(player, groupe_bombes, chocAvecBombe, null, this);
-
-    // groupe balles
-    groupe_balles = this.physics.add.group();
-
-    // destruction balles hors écran
-    this.physics.world.setBoundsCollision(true, true, true, true);
-    this.physics.world.on("worldbounds", function(body) {
-        var objet = body.gameObject;
-        if (groupe_balles.contains(objet)) {
-            objet.destroy();
-        }
-    });
 
     // score
     zone_texte_score = this.add.text(16, 16, 'Score: 0', {
@@ -140,6 +173,7 @@ function create() {
         fill: '#000'
     });
 }
+
 
 /***********************************************************************/
 /** UPDATE
@@ -151,12 +185,10 @@ function update() {
     }
 
     if (clavier.left.isDown) {
-        player.direction = 'left';
         player.setVelocityX(-160);
         player.anims.play('anim_gauche', true);
     }
     else if (clavier.right.isDown) {
-        player.direction = 'right';
         player.setVelocityX(160);
         player.anims.play('anim_droite', true);
     }
@@ -165,38 +197,11 @@ function update() {
         player.anims.play('anim_face');
     }
 
-    if (clavier.space.isDown && player.body.touching.down) {
+    if (clavier.space.isDown && player.body.blocked.down) {
         player.setVelocityY(-330);
     }
-
-    // tir
-    if (Phaser.Input.Keyboard.JustDown(toucheTir)) {
-        tirer(player);
-    }
 }
 
-/***********************************************************************/
-/** FONCTION TIRER
-/***********************************************************************/
-function tirer(player) {
-
-    var coefDirection = 1;
-
-    if (player.direction === 'left') {
-        coefDirection = -1;
-    }
-
-    var balle = groupe_balles.create(
-        player.x + (25 * coefDirection),
-        player.y - 5,
-        'img_balle'
-    );
-
-    balle.setCollideWorldBounds(true);
-    balle.body.allowGravity = false;
-    balle.setVelocity(600 * coefDirection, 0);
-    balle.body.onWorldBounds = true;
-}
 
 /***********************************************************************/
 /** CRÉATION D'UNE BOMBE
@@ -212,14 +217,17 @@ function creerBombe(player) {
     }
 
     var bombe = groupe_bombes.create(x, 16, 'img_bombe');
+
     bombe.setBounce(1);
     bombe.setCollideWorldBounds(true);
     bombe.setVelocity(
         Phaser.Math.Between(-200, 200),
         20
     );
-    bombe.body.allowGravity = false;
+
+    bombe.allowGravity = false;
 }
+
 
 /***********************************************************************/
 /** RAMASSER UNE ÉTOILE
@@ -231,7 +239,6 @@ function ramasserEtoile(player, etoile) {
     score += 10;
     zone_texte_score.setText('Score: ' + score);
 
-    // 2 bombes par étoile
     creerBombe(player);
     creerBombe(player);
 
@@ -241,6 +248,7 @@ function ramasserEtoile(player, etoile) {
         });
     }
 }
+
 
 /***********************************************************************/
 /** COLLISION AVEC UNE BOMBE = GAME OVER
